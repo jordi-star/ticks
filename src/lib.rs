@@ -7,10 +7,13 @@ use std::{
 use oauth2::TokenResponse;
 use oauth2::{AuthUrl, AuthorizationCode, ClientId, CsrfToken, RedirectUrl, Scope, TokenUrl};
 use objects::{
-    projects::{Project, ProjectID},
+    projects::{Project, ProjectData, ProjectID},
     tasks::{Task, TaskID},
 };
-use reqwest::header::{HeaderMap, HeaderValue};
+use reqwest::{
+    header::{HeaderMap, HeaderValue},
+    Url,
+};
 use serde::{Deserialize, Serialize};
 
 pub mod objects;
@@ -53,7 +56,26 @@ impl TickTick {
             http_client: http_client_result?,
         })
     }
-
+    pub async fn get_project_data(
+        &self,
+        project_id: &ProjectID,
+    ) -> Result<ProjectData, TickTickError> {
+        let resp = self
+            .http_client
+            .get(format!(
+                "https://ticktick.com/open/v1/project/{}/data",
+                project_id.0
+            ))
+            .send()
+            .await?
+            .error_for_status()?;
+        let mut project_data = resp.json::<ProjectData>().await?;
+        project_data
+            .tasks
+            .iter_mut()
+            .for_each(|task| task.http_client = self.http_client.clone());
+        Ok(project_data)
+    }
     pub async fn get_task(
         &self,
         project_id: &ProjectID,
@@ -115,6 +137,10 @@ impl TickTick {
 #[derive(Debug)]
 pub enum AuthorizationError {
     ReqwestClientError(reqwest::Error),
+    InvalidCSRFState {
+        expected: CsrfToken,
+        recieved: CsrfToken,
+    },
 }
 
 impl From<reqwest::Error> for AuthorizationError {
@@ -123,6 +149,74 @@ impl From<reqwest::Error> for AuthorizationError {
     }
 }
 
+pub struct Authorization {}
+
+impl Authorization {
+    pub fn begin_auth(
+        client_id: String,
+        redirect_uri: String,
+    ) -> Result<AwaitingAuthCode, AuthorizationError> {
+        let auth_client = oauth2::basic::BasicClient::new(
+            ClientId::new(client_id),
+            None,
+            AuthUrl::new("https://ticktick.com/oauth/authorize".to_string()).unwrap(),
+            Some(TokenUrl::new("https://ticktick.com/oauth/token".to_string()).unwrap()),
+        )
+        .set_redirect_uri(RedirectUrl::new(redirect_uri).unwrap());
+        let (authorization_url, csrf_state) = auth_client
+            .authorize_url(CsrfToken::new_random)
+            .add_scope(Scope::new("tasks:read".to_string()))
+            .add_scope(Scope::new("tasks:write".to_string()))
+            .url();
+        Ok(AwaitingAuthCode {
+            authorization_url,
+            csrf_state,
+            auth_client,
+        })
+    }
+}
+
+pub struct AwaitingAuthCode {
+    pub authorization_url: Url,
+    csrf_state: CsrfToken,
+    auth_client: oauth2::basic::BasicClient,
+}
+
+impl AwaitingAuthCode {
+    pub fn get_url(&self) -> &Url {
+        &self.authorization_url
+    }
+    pub async fn finish_auth(
+        self,
+        client_secret: String,
+        auth_code: String,
+        state: String,
+    ) -> Result<AccessToken, AuthorizationError> {
+        let http_client = reqwest::Client::new();
+        let mut token_request_form = HashMap::new();
+        token_request_form.insert("client_id", self.auth_client.client_id().as_str());
+        token_request_form.insert("client_secret", &client_secret);
+        token_request_form.insert("code", &auth_code);
+        token_request_form.insert("grant_type", "authorization_code");
+        token_request_form.insert("scope", "tasks:write tasks:read");
+        token_request_form.insert("redirect_uri", self.auth_client.redirect_url().unwrap());
+        if &state != self.csrf_state.secret() {
+            return Err(AuthorizationError::InvalidCSRFState {
+                expected: self.csrf_state,
+                recieved: CsrfToken::new(state),
+            });
+        };
+        let token_request_result = http_client
+            .post("https://ticktick.com/oauth/token")
+            .form(&token_request_form)
+            .send()
+            .await;
+        Ok(token_request_result?.json::<AccessToken>().await?)
+    }
+}
+
+// pub struct AuthUrl(pub Url);
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct AccessToken {
     #[serde(rename = "access_token")]
@@ -130,74 +224,6 @@ pub struct AccessToken {
     pub token_type: String,
     pub expires_in: u32,
     pub scope: String,
-}
-
-impl AccessToken {
-    pub async fn new_authorization(
-        client_id: String,
-        client_secret: String,
-    ) -> Result<Self, AuthorizationError> {
-        let auth_client = oauth2::basic::BasicClient::new(
-            ClientId::new(client_id),
-            None,
-            AuthUrl::new("https://ticktick.com/oauth/authorize".to_string()).unwrap(),
-            Some(TokenUrl::new("https://ticktick.com/oauth/token".to_string()).unwrap()),
-        )
-        .set_redirect_uri(RedirectUrl::new("http://localhost:8080".to_string()).unwrap());
-        let (auth_url, csrf_state) = auth_client
-            .authorize_url(CsrfToken::new_random)
-            .add_scope(Scope::new("tasks:read".to_string()))
-            .add_scope(Scope::new("tasks:write".to_string()))
-            .url();
-        println!("Browse to: {}", auth_url);
-        let (code, state) = {
-            let listener = TcpListener::bind("127.0.0.1:8080").unwrap();
-            let Ok((mut stream, _)) = listener.accept() else {
-                panic!("ERRRR");
-            };
-            let mut stream_reader = BufReader::new(&stream);
-            let mut response = String::new();
-            stream_reader.read_line(&mut response).unwrap();
-            println!("resp {:?}", response);
-
-            let code: AuthorizationCode =
-                AuthorizationCode::new(get_value_from_http_response(&response, "code").unwrap());
-            let state: CsrfToken =
-                CsrfToken::new(get_value_from_http_response(&response, "state").unwrap());
-            stream.write_all("HTTP/1.1 200 OK".as_bytes()).unwrap();
-            (code, state)
-        };
-        println!("c   {}   , s   {}   ", code.secret(), state.secret());
-        let http_client = reqwest::Client::new();
-        let mut token_request_form = HashMap::new();
-        token_request_form.insert("client_id", auth_client.client_id().as_str());
-        // TODO!HIGH Make private.
-        token_request_form.insert("client_secret", &client_secret);
-        token_request_form.insert("code", code.secret());
-        token_request_form.insert("grant_type", "authorization_code");
-        token_request_form.insert("scope", "tasks:write tasks:read");
-        token_request_form.insert("redirect_uri", "http://localhost:8080");
-
-        let token_request_result = http_client
-            .post("https://ticktick.com/oauth/token")
-            .form(&token_request_form)
-            .send()
-            .await;
-        Ok(token_request_result?.json::<Self>().await?)
-    }
-}
-
-pub fn get_value_from_http_response(response: &String, key: &str) -> Option<String> {
-    let mut response_split = response.split(&[' ', '=', '&']);
-    loop {
-        if let Some(chunk) = response_split.next() {
-            if chunk.contains(key) {
-                break response_split.next().map(str::to_string);
-            }
-        } else {
-            panic!("RETURN ERROR NO CODE");
-        }
-    }
 }
 
 // #[cfg(test)]

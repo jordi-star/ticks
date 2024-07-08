@@ -51,7 +51,7 @@ impl Project {
     pub fn get_id(self) -> ProjectID {
         self.id
     }
-    pub(crate) async fn get_data(&self) -> Result<ProjectData, TickTickError> {
+    pub async fn get_data(&self) -> Result<ProjectData, TickTickError> {
         let resp = self
             .http_client
             .get(format!(
@@ -61,7 +61,12 @@ impl Project {
             .send()
             .await?
             .error_for_status()?;
-        Ok(resp.json::<ProjectData>().await?)
+        let mut project_data = resp.json::<ProjectData>().await?;
+        project_data
+            .tasks
+            .iter_mut()
+            .for_each(|task| task.http_client = self.http_client.clone());
+        Ok(project_data)
     }
     pub async fn get_all(ticktick: &TickTick) -> Result<Vec<Project>, TickTickError> {
         ticktick.get_all_projects().await
@@ -140,7 +145,7 @@ impl From<String> for ProjectKind {
 // be accessed using Project::get_associated_tasks, etc.
 #[derive(Serialize, Deserialize, Default, Debug)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct ProjectData {
+pub struct ProjectData {
     pub tasks: Vec<Task>,
     pub columns: Vec<Column>,
 }

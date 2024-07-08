@@ -77,12 +77,18 @@ impl Task {
         Ok(())
     }
     pub async fn publish_changes(&self) -> Result<(), reqwest::Error> {
-        self.http_client
-            .post(format!("https://ticktick.com/open/v1/task/{}", self.id.0))
-            .json(self)
-            .send()
-            .await?
-            .error_for_status()?;
+        println!(
+            "{} {:#?}, {:#?}",
+            serde_json::to_string_pretty(&self).unwrap(),
+            self.http_client,
+            self.http_client
+                .post(format!("https://ticktick.com/open/v1/task/{}", self.id.0))
+                .json(self)
+                .send()
+                .await?
+                .text()
+                .await
+        );
         Ok(())
     }
 
