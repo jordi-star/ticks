@@ -1,21 +1,19 @@
-use std::{
-    collections::HashMap,
-};
-
-use oauth2::TokenResponse;
+//! Simple, ergonomic Rust wrapper for the TickTick Open API
+pub mod builders;
+pub mod projects;
+pub mod tasks;
+pub(crate) mod ticktick_datetime_format;
 use oauth2::{AuthUrl, ClientId, CsrfToken, RedirectUrl, Scope, TokenUrl};
-use objects::{
-    projects::{Project, ProjectData, ProjectID},
-    tasks::{Task, TaskID},
-};
+use projects::{Project, ProjectData, ProjectID};
 use reqwest::{
     header::{HeaderMap, HeaderValue},
     Url,
 };
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use tasks::{Task, TaskID};
 
-pub mod objects;
-
+/// Errors that can occur while calling the TickTick API.
 #[derive(Debug)]
 pub enum TickTickError {
     ClientError(reqwest::Error),
@@ -34,12 +32,16 @@ impl From<serde_json::Error> for TickTickError {
     }
 }
 
+/// Wraps an HTTP Client containing the API Authorization header.
+/// Used for making calls to and from the TickTick API.
+/// You can retrieve tasks and projects from here, but it might be more ergonomic to use `Task::get` or `Project::get`.
 #[derive(Debug)]
 pub struct TickTick {
     http_client: reqwest::Client,
 }
 
 impl TickTick {
+    /// Create new TickTick wrapper using provided authorization.
     pub fn new(access_token: AccessToken) -> Result<Self, TickTickError> {
         let mut headers_map = HeaderMap::new();
         let mut auth_header_value =
@@ -54,6 +56,8 @@ impl TickTick {
             http_client: http_client_result?,
         })
     }
+    /// Get Project Data using ProjectID
+    /// [API Reference](https://developer.ticktick.com/docs/index.html#/openapi?id=get-project-with-data)
     pub async fn get_project_data(
         &self,
         project_id: &ProjectID,
@@ -74,6 +78,8 @@ impl TickTick {
             .for_each(|task| task.http_client = self.http_client.clone());
         Ok(project_data)
     }
+    /// Get task using ProjectID & TaskID
+    /// [API Reference](https://developer.ticktick.com/docs/index.html#/openapi?id=get-task-by-project-id-and-task-id)
     pub async fn get_task(
         &self,
         project_id: &ProjectID,
@@ -93,7 +99,8 @@ impl TickTick {
         Ok(task)
     }
 
-    pub async fn get_all_tasks(&self) -> Result<Vec<Task>, TickTickError> {
+    /// Get all tasks associated with projects.
+    pub async fn get_all_tasks_in_projects(&self) -> Result<Vec<Task>, TickTickError> {
         let projects = self.get_all_projects().await?;
         let mut value: Vec<Task> = Vec::new();
         for proj in projects {
@@ -102,6 +109,8 @@ impl TickTick {
         Ok(value)
     }
 
+    /// Get project using ProjectID
+    /// [API Reference](https://developer.ticktick.com/docs/index.html#/openapi?id=get-project-by-id)
     pub async fn get_project(&self, project_id: &ProjectID) -> Result<Project, TickTickError> {
         let resp = self
             .http_client
@@ -117,6 +126,8 @@ impl TickTick {
         Ok(proj)
     }
 
+    /// Get user projects.
+    /// [API Reference](https://developer.ticktick.com/docs/index.html#/openapi?id=get-user-project)
     pub async fn get_all_projects(&self) -> Result<Vec<Project>, TickTickError> {
         let mut projects = self
             .http_client
@@ -132,6 +143,7 @@ impl TickTick {
     }
 }
 
+/// Errors that can occur during authorization
 #[derive(Debug)]
 pub enum AuthorizationError {
     ReqwestClientError(reqwest::Error),
@@ -150,6 +162,7 @@ impl From<reqwest::Error> for AuthorizationError {
 pub struct Authorization {}
 
 impl Authorization {
+    /// Create authorization URL with required data, and begin authorization process.
     pub fn begin_auth(
         client_id: String,
         redirect_uri: String,
@@ -181,9 +194,12 @@ pub struct AwaitingAuthCode {
 }
 
 impl AwaitingAuthCode {
+    /// Get associated authorization_url
     pub fn get_url(&self) -> &Url {
         &self.authorization_url
     }
+
+    /// Finish OAuth sequence and retrieve AccessToken
     pub async fn finish_auth(
         self,
         client_secret: String,
@@ -213,8 +229,7 @@ impl AwaitingAuthCode {
     }
 }
 
-// pub struct AuthUrl(pub Url);
-
+/// API Access Token, created using Authorization::begin_auth
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct AccessToken {
     #[serde(rename = "access_token")]
@@ -223,14 +238,3 @@ pub struct AccessToken {
     pub expires_in: u32,
     pub scope: String,
 }
-
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-
-//     #[test]
-//     fn it_works() {
-//         let result = add(2, 2);
-//         assert_eq!(result, 4);
-//     }
-// }

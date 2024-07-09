@@ -1,12 +1,15 @@
+use chrono::{DateTime, Utc};
 use serde::Serialize;
 
-use crate::{TickTick, TickTickError};
+use crate::{ticktick_datetime_format, TickTick, TickTickError};
 
 use super::{
     projects::{Project, ProjectID, ProjectKind, ProjectViewMode},
-    tasks::{ChecklistItem, Task, TaskPriority, TaskStatus},
+    tasks::{Subtask, Task, TaskPriority, TaskStatus},
 };
 
+/// Builder class for TickTick Projects. Call `build_and_publish` to create task and push to the TickTick API.
+/// [API Reference](https://developer.ticktick.com/docs/index.html#/openapi?id=task-1)
 #[derive(Serialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct TaskBuilder {
@@ -17,16 +20,22 @@ pub struct TaskBuilder {
     project_id: Option<ProjectID>,
     #[serde(skip_serializing_if = "Option::is_none")]
     is_all_day: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    completed_time: Option<String>, // TODO: Could make this a chrono datetime and see if serde can serialize it? It's a date-time string.
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        with = "ticktick_datetime_format::optional_datetime"
+    )]
+    completed_time: Option<DateTime<Utc>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     content: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     desc: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    due_date: Option<String>, // TODO: Same as above, date-time string
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    items: Vec<ChecklistItem>,
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        with = "ticktick_datetime_format::optional_datetime"
+    )]
+    due_date: Option<DateTime<Utc>>,
+    #[serde(default, rename = "items", skip_serializing_if = "Vec::is_empty")]
+    subtasks: Vec<Subtask>,
     #[serde(skip_serializing_if = "Option::is_none")]
     priority: Option<TaskPriority>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -35,8 +44,11 @@ pub struct TaskBuilder {
     repeat_flag: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     sort_order: Option<i64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    start_date: Option<String>, // TODO: Above, date-time
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        with = "ticktick_datetime_format::optional_datetime"
+    )]
+    start_date: Option<DateTime<Utc>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     status: Option<TaskStatus>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -65,8 +77,8 @@ impl TaskBuilder {
         self.is_all_day = Some(value);
         self
     }
-    pub fn completed_time(mut self, value: &str) -> Self {
-        self.completed_time = Some(value.into());
+    pub fn completed_time(mut self, value: DateTime<Utc>) -> Self {
+        self.completed_time = Some(value);
         self
     }
     pub fn content(mut self, value: &str) -> Self {
@@ -77,12 +89,12 @@ impl TaskBuilder {
         self.desc = Some(value.into());
         self
     }
-    pub fn due_date(mut self, value: &str) -> Self {
-        self.due_date = Some(value.into());
+    pub fn due_date(mut self, value: DateTime<Utc>) -> Self {
+        self.due_date = Some(value);
         self
     }
-    pub fn items(mut self, value: Vec<ChecklistItem>) -> Self {
-        self.items = value;
+    pub fn subtasks(mut self, value: Vec<Subtask>) -> Self {
+        self.subtasks = value;
         self
     }
     pub fn priority(mut self, value: TaskPriority) -> Self {
@@ -101,8 +113,8 @@ impl TaskBuilder {
         self.sort_order = Some(value);
         self
     }
-    pub fn start_date(mut self, value: &str) -> Self {
-        self.start_date = Some(value.into());
+    pub fn start_date(mut self, value: DateTime<Utc>) -> Self {
+        self.start_date = Some(value);
         self
     }
     pub fn status(mut self, value: TaskStatus) -> Self {
@@ -118,6 +130,7 @@ impl TaskBuilder {
         self
     }
 
+    /// Create Task and publish to TickTick API
     pub async fn build_and_publish(self) -> Result<Task, TickTickError> {
         let mut task = self
             .http_client
@@ -132,6 +145,8 @@ impl TaskBuilder {
     }
 }
 
+/// Builder class for TickTick Projects. Call `build_and_publish` to create project and push to the TickTick API.
+/// [API Reference](https://developer.ticktick.com/docs/index.html#/openapi?id=project-1)
 #[derive(Serialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectBuilder {
@@ -173,6 +188,7 @@ impl ProjectBuilder {
         self
     }
 
+    /// Create Project and publish to TickTick API
     pub async fn build_and_publish(self) -> Result<Project, TickTickError> {
         let mut project = self
             .http_client

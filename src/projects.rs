@@ -1,10 +1,10 @@
-
 use serde::{Deserialize, Serialize};
 
 use crate::{TickTick, TickTickError};
 
 use super::{builders::ProjectBuilder, tasks::Task};
 
+/// ID used to identify Projects from TickTick.
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 #[serde(transparent)]
 pub struct ProjectID(pub String);
@@ -15,6 +15,7 @@ impl ProjectID {
     }
 }
 
+/// ID used to identify Project Groups from TickTick.
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 #[serde(transparent)]
 pub struct GroupID(pub String);
@@ -25,7 +26,8 @@ impl GroupID {
     }
 }
 
-// ProjectInfo is analogous to TickTick's Project definition.
+/// TickTick Project info
+/// [API Reference](https://developer.ticktick.com/docs/index.html#/openapi?id=project-1)
 #[derive(Serialize, Deserialize, Default, Debug)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Project {
@@ -78,6 +80,21 @@ impl Project {
     }
     pub async fn get(ticktick: &TickTick, id: &ProjectID) -> Result<Project, TickTickError> {
         ticktick.get_project(id).await
+    }
+    /// Send changes made to this project to the TickTick API. Clients will require a refresh/sync for changes to take effect.
+    /// [API Reference](https://developer.ticktick.com/docs/index.html#/openapi?id=update-project)
+    pub async fn publish_changes(&self) -> Result<(), reqwest::Error> {
+        self.http_client
+            .post(format!(
+                "https://ticktick.com/open/v1/project/{}",
+                self.id.0
+            ))
+            .json(self)
+            .send()
+            .await?
+            .text()
+            .await?;
+        Ok(())
     }
 }
 
@@ -139,9 +156,8 @@ impl From<String> for ProjectKind {
     }
 }
 
-// This class is not public as this is simply a wrapper for serializing
-// TickTick's project data responses. All of this data is read-only, and can only
-// be accessed using Project::get_associated_tasks, etc.
+/// TickTick ProjectData
+/// [API Reference](https://developer.ticktick.com/docs/index.html#/openapi?id=projectdata)
 #[derive(Serialize, Deserialize, Default, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectData {
