@@ -23,7 +23,7 @@ where
 
 pub mod optional_datetime {
     use chrono::{DateTime, Utc};
-    use serde::{Deserialize, Deserializer, Serializer};
+    use serde::{Serializer};
 
     pub fn serialize<S>(date_opt: &Option<DateTime<Utc>>, serializer: S) -> Result<S::Ok, S::Error>
     where
