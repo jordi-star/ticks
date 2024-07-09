@@ -14,7 +14,7 @@ To use the TickTick API, you must authorize your app at runtime. Let's talk abou
 
 ## Authorization
 The TickTick API uses [OAuth](https://oauth.net/2/) for authentication.
-Ticks handles most of the authentication for you, leaving only reading the API's HTTP OAuth response to the you.
+Ticks handles most of the authentication for you, leaving only reading the API's HTTP OAuth response to you.
 ```rust
 /// Get Authorization URL, this is the link the user must visit to allow our Application access to their account.
 /// redirect_uri must be the same URL specified in the TickTick Developer Center.
