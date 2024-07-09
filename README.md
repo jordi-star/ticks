@@ -1,6 +1,7 @@
 # Ticks
 Simple, ergonomic Rust wrapper for the TickTick Open API
 
+![docs.rs](https://img.shields.io/docsrs/ticks)
 ## Getting Started
 First, register your application with the TickTick Developer Center:
 > To get started using the TickTick Open API, you will need to register your application and obtain a client ID and client secret. You can register your application by visiting the [TickTick Developer Center](https://developer.ticktick.com/manage). Once registered, you will receive a client ID and client secret which you will use to authenticate your requests.
@@ -36,3 +37,6 @@ stream_reader.read_line(&mut response)?;
 stream.write_all("HTTP/1.1 200 OK".as_bytes())?;
 println!("Response {:?}", response);
 ```
+
+## Documentation
+The docs can be found at https://docs.rs/ticks/latest.
