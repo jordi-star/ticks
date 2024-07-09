@@ -1,11 +1,9 @@
 use std::{
     collections::HashMap,
-    io::{BufRead, BufReader, Write},
-    net::TcpListener,
 };
 
 use oauth2::TokenResponse;
-use oauth2::{AuthUrl, AuthorizationCode, ClientId, CsrfToken, RedirectUrl, Scope, TokenUrl};
+use oauth2::{AuthUrl, ClientId, CsrfToken, RedirectUrl, Scope, TokenUrl};
 use objects::{
     projects::{Project, ProjectData, ProjectID},
     tasks::{Task, TaskID},
