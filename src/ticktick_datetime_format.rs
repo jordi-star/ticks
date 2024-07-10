@@ -1,8 +1,7 @@
 use chrono::{DateTime, NaiveDateTime, Utc};
 use serde::{self, Deserialize, Deserializer, Serializer};
 
-const TICKTICK_DATETIME_FORMAT_STR: &str = "%Y-%m-%dT%T%z"; // "yyyy-MM-dd'T'HH:mm:ssZ"
-
+const TICKTICK_DATETIME_FORMAT_STR: &str = "%Y-%m-%dT%H:%M:%S%.3f%z"; // "yyyy-MM-dd'T'HH:mm:ssZ"
 pub fn serialize<S>(date: &DateTime<Utc>, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
@@ -23,7 +22,7 @@ where
 
 pub mod optional_datetime {
     use chrono::{DateTime, Utc};
-    use serde::{Serializer};
+    use serde::Serializer;
 
     pub fn serialize<S>(date_opt: &Option<DateTime<Utc>>, serializer: S) -> Result<S::Ok, S::Error>
     where
