@@ -7,7 +7,7 @@ use crate::{ticktick_datetime_format, TickTick, TickTickError};
 use super::{builders::TaskBuilder, projects::ProjectID};
 
 /// ID used to identify Tasks from TickTick.
-#[derive(Serialize, Deserialize, Default, Debug, Clone)]
+#[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq, Eq, Hash)]
 #[serde(transparent)]
 pub struct TaskID(pub String);
 
@@ -133,7 +133,7 @@ impl Task {
         self.status = TaskStatus::Completed;
         self.http_client
             .post(format!(
-                "/open/v1/project/{}/task/{}/complete",
+                "https://ticktick.com/open/v1/project/{}/task/{}/complete",
                 self.project_id.0, self.id.0
             ))
             .json(self)
@@ -146,7 +146,7 @@ impl Task {
 
 /// Enum matching Task Priority values listed in the Task API Reference
 /// [API Reference](https://developer.ticktick.com/docs/index.html#/openapi?id=task-1)
-#[derive(Serialize_repr, Deserialize_repr, Debug, Default)]
+#[derive(Serialize_repr, Deserialize_repr, Debug, Default, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum TaskPriority {
     #[default]
@@ -158,7 +158,7 @@ pub enum TaskPriority {
 
 /// Enum matching Task Status values listed in the Task API Reference
 /// [API Reference](https://developer.ticktick.com/docs/index.html#/openapi?id=task-1)
-#[derive(Serialize_repr, Deserialize_repr, Debug, Default)]
+#[derive(Serialize_repr, Deserialize_repr, Debug, Default, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum TaskStatus {
     #[default]
@@ -168,7 +168,7 @@ pub enum TaskStatus {
 
 /// Enum matching Subtask Status values listed in the ChecklistItem API Reference
 /// [API Reference](https://developer.ticktick.com/docs/index.html#/openapi?id=checklistitem)
-#[derive(Serialize_repr, Deserialize_repr, Debug, Default)]
+#[derive(Serialize_repr, Deserialize_repr, Debug, Default, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum SubtaskStatus {
     #[default]

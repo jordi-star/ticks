@@ -18,6 +18,7 @@ use tasks::{Task, TaskID};
 pub enum TickTickError {
     ClientError(reqwest::Error),
     ResponseParseError(serde_json::Error),
+    RuntimeError(String),
 }
 
 impl From<reqwest::Error> for TickTickError {
@@ -32,12 +33,32 @@ impl From<serde_json::Error> for TickTickError {
     }
 }
 
+impl std::fmt::Display for TickTickError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TickTickError::ClientError(err) => write!(f, "Client error: {}", err),
+            TickTickError::ResponseParseError(err) => write!(f, "Response parse error: {}", err),
+            TickTickError::RuntimeError(err) => write!(f, "Runtime error: {}", err),
+        }
+    }
+}
+
+impl std::error::Error for TickTickError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            TickTickError::ClientError(err) => Some(err),
+            TickTickError::ResponseParseError(err) => Some(err),
+            TickTickError::RuntimeError(_) => None,
+        }
+    }
+}
+
 /// Wraps an HTTP Client containing the API Authorization header.
 /// Used for making calls to and from the TickTick API.
 /// You can retrieve tasks and projects from here, but it might be more ergonomic to use `Task::get` or `Project::get`.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TickTick {
-    http_client: reqwest::Client,
+    http_client: std::sync::Arc<std::sync::RwLock<Option<reqwest::Client>>>,
 }
 
 impl TickTick {
@@ -49,12 +70,25 @@ impl TickTick {
                 .expect("Invalid access token value.");
         auth_header_value.set_sensitive(true);
         headers_map.insert(reqwest::header::AUTHORIZATION, auth_header_value);
-        let http_client_result = reqwest::Client::builder()
+
+        let client = reqwest::Client::builder()
             .default_headers(headers_map)
-            .build();
+            .build()?;
+
         Ok(Self {
-            http_client: http_client_result?,
+            http_client: std::sync::Arc::new(std::sync::RwLock::new(Some(client))),
         })
+    }
+
+    /// Get the HTTP client
+    pub fn get_client(&self) -> Result<reqwest::Client, TickTickError> {
+        let read_guard = self.http_client.read().unwrap();
+        if let Some(ref client) = *read_guard {
+            return Ok(client.clone());
+        }
+        Err(TickTickError::RuntimeError(
+            "HTTP client not initialized".to_string(),
+        ))
     }
     /// Get Project Data using ProjectID
     /// [API Reference](https://developer.ticktick.com/docs/index.html#/openapi?id=get-project-with-data)
@@ -62,8 +96,8 @@ impl TickTick {
         &self,
         project_id: &ProjectID,
     ) -> Result<ProjectData, TickTickError> {
-        let resp = self
-            .http_client
+        let client = self.get_client()?;
+        let resp = client
             .get(format!(
                 "https://ticktick.com/open/v1/project/{}/data",
                 project_id.0
@@ -75,7 +109,7 @@ impl TickTick {
         project_data
             .tasks
             .iter_mut()
-            .for_each(|task| task.http_client = self.http_client.clone());
+            .for_each(|task| task.http_client = self.get_client().unwrap());
         Ok(project_data)
     }
     /// Get task using ProjectID & TaskID
@@ -85,8 +119,8 @@ impl TickTick {
         project_id: &ProjectID,
         task_id: &TaskID,
     ) -> Result<Task, TickTickError> {
-        let resp = self
-            .http_client
+        let client = self.get_client()?;
+        let resp = client
             .get(format!(
                 "https://ticktick.com/open/v1/project/{}/task/{}",
                 project_id.0, task_id.0
@@ -95,7 +129,7 @@ impl TickTick {
             .await?
             .error_for_status()?;
         let mut task = resp.json::<Task>().await?;
-        task.http_client = self.http_client.clone();
+        task.http_client = self.get_client().unwrap();
         Ok(task)
     }
 
@@ -112,8 +146,8 @@ impl TickTick {
     /// Get project using ProjectID
     /// [API Reference](https://developer.ticktick.com/docs/index.html#/openapi?id=get-project-by-id)
     pub async fn get_project(&self, project_id: &ProjectID) -> Result<Project, TickTickError> {
-        let resp = self
-            .http_client
+        let client = self.get_client()?;
+        let resp = client
             .get(format!(
                 "https://ticktick.com/open/v1/project/{}",
                 project_id.0
@@ -122,22 +156,22 @@ impl TickTick {
             .await?
             .error_for_status()?;
         let mut proj = resp.json::<Project>().await?;
-        proj.http_client = self.http_client.clone();
+        proj.http_client = self.get_client().unwrap();
         Ok(proj)
     }
 
     /// Get user projects.
     /// [API Reference](https://developer.ticktick.com/docs/index.html#/openapi?id=get-user-project)
     pub async fn get_all_projects(&self) -> Result<Vec<Project>, TickTickError> {
-        let mut projects = self
-            .http_client
+        let client = self.get_client()?;
+        let mut projects = client
             .get("https://ticktick.com/open/v1/project/")
             .send()
             .await?
             .json::<Vec<Project>>()
             .await?;
         for proj in &mut projects {
-            proj.http_client = self.http_client.clone();
+            proj.http_client = self.get_client().unwrap();
         }
         Ok(projects)
     }

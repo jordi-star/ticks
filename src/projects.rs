@@ -1,17 +1,24 @@
 use serde::{Deserialize, Serialize};
+use std::fmt::Display;
 
 use crate::{TickTick, TickTickError};
 
 use super::{builders::ProjectBuilder, tasks::Task};
 
 /// ID used to identify Projects from TickTick.
-#[derive(Serialize, Deserialize, Default, Debug, Clone)]
+#[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq, Eq, Hash)]
 #[serde(transparent)]
 pub struct ProjectID(pub String);
 
 impl ProjectID {
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
+    }
+}
+
+impl Display for ProjectID {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 
@@ -33,7 +40,7 @@ impl GroupID {
 pub struct Project {
     #[serde(skip)]
     pub(crate) http_client: reqwest::Client,
-    pub(crate) id: ProjectID,
+    pub id: ProjectID,
     pub name: String,
     pub color: String,
     pub sort_order: i64,

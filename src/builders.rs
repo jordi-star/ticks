@@ -61,7 +61,7 @@ impl TaskBuilder {
     pub fn new(ticktick: &TickTick, title: String) -> Self {
         Self {
             title,
-            http_client: ticktick.http_client.clone(),
+            http_client: ticktick.get_client().unwrap(),
             ..Default::default()
         }
     }
@@ -167,7 +167,7 @@ impl ProjectBuilder {
     pub fn new(ticktick: &TickTick, name: String) -> Self {
         Self {
             name,
-            http_client: ticktick.http_client.clone(),
+            http_client: ticktick.get_client().unwrap(),
             ..Default::default()
         }
     }
